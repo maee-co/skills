@@ -5,8 +5,11 @@
 ## 入れ方
 
 ```sh
-npx skills add maee-co/skills
+npx skills add maee-co/skills                      # 全部
+npx skills add maee-co/skills --skill deep-think   # 1 本だけ
 ```
+
+更新は `npx skills update`。
 
 手で入れる場合は `skills/<name>/` を `~/.claude/skills/` にコピーすれば動きます。
 
