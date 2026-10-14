@@ -6,7 +6,7 @@
 
 ```sh
 npx skills add maee-co/skills                      # 全部
-npx skills add maee-co/skills --skill deep-think   # 1 本だけ
+npx skills add maee-co/skills --skill deep-audit   # 1 本だけ
 ```
 
 更新は `npx skills update`。
@@ -17,7 +17,6 @@ npx skills add maee-co/skills --skill deep-think   # 1 本だけ
 
 | skill | 何をするか |
 |---|---|
-| [deep-think](skills/deep-think/SKILL.md) | 深い分析・辛口レビュー・壁打ちで、思考の手順を書き出して実行させる |
 | [close](skills/close/SKILL.md) | 「しめよう」で、締めてよいかを git / gh の事実で判定し、残件を片づけてから報告する |
 | [deep-audit](skills/deep-audit/SKILL.md) | セキュリティ監査（`--security`）と原因不明バグ（`--bug`）を、壊す側から逆向きに詰める |
 
