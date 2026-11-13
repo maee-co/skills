@@ -19,6 +19,7 @@ npx skills add maee-co/skills --skill deep-audit   # 1 本だけ
 |---|---|
 | [close](skills/close/SKILL.md) | 「しめよう」で、締めてよいかを git / gh の事実で判定し、残件を片づけてから報告する |
 | [deep-audit](skills/deep-audit/SKILL.md) | セキュリティ監査（`--security`）と原因不明バグ（`--bug`）を、壊す側から逆向きに詰める |
+| [session-sheet](skills/session-sheet/SKILL.md) | 作業のあるセッションごとに 1 枚の票（claude.ai アーティファクト）を立てて、状態・依頼者の宿題・進捗・証拠を同じ骨格で見せる |
 
 ## License
 
