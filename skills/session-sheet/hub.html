@@ -1,0 +1,105 @@
+<title>セッション票の一覧</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<!--
+セッション票の一覧ハブ。db: sheets/<artifactId> {title, url, state: running|waiting|done|stopped, openAsks, summary, updatedAt}
+公開: {"db":{"rules":[{"path":"sheets","read":"view","write":"owner"}]}}。票を立てたら 1 行 set、状態か宿題の件数が変わったら update。並びは 宿題あり → 走行中 → その他、各群で新しい順。
+色は session-sheet.html と同じトークン。
+-->
+<style>
+/* layout: 上に状態の件数タイル（押すと絞り込み）、下に票の行。宿題のある票が先頭 */
+:root{
+  --background:#f7f9f8; --card:#fbfdfc; --foreground:#1a211e; --muted:#eef1f0; --muted-foreground:#5f6563;
+  --border:#d7dad9; --input:#cbcfcd; --ring:#53b9ab;
+  --primary:#008573; --primary-soft:#e0f8f3; --primary-line:#83cdc1;
+  --warn:#ab6400; --warn-soft:#fefbe9; --warn-line:#e9c162;
+  --ok:#2a7e3b; --ok-soft:#e9f6e9; --ok-line:#94ce9a;
+  --radius:10px;
+  --sans:"IBM Plex Sans JP","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --background:#101211; --card:#171918; --foreground:#eceeed; --muted:#202221; --muted-foreground:#adb5b2;
+  --border:#373b39; --input:#444947; --ring:#207e73;
+  --primary:#0bd8b6; --primary-soft:#0d2d2a; --primary-line:#1c6961;
+  --warn:#ffca16; --warn-soft:#302008; --warn-line:#714f19;
+  --ok:#71d083; --ok-soft:#1b2a1e; --ok-line:#366740; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --background:#101211; --card:#171918; --foreground:#eceeed; --muted:#202221; --muted-foreground:#adb5b2;
+  --border:#373b39; --input:#444947; --ring:#207e73;
+  --primary:#0bd8b6; --primary-soft:#0d2d2a; --primary-line:#1c6961;
+  --warn:#ffca16; --warn-soft:#302008; --warn-line:#714f19;
+  --ok:#71d083; --ok-soft:#1b2a1e; --ok-line:#366740; color-scheme:dark}
+body{background:var(--background);color:var(--foreground);font-family:var(--sans);font-size:15px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 64px}
+main{max-width:880px;margin:0 auto;display:grid;gap:24px}
+h1{font-size:1.5rem;margin:0}
+:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+.t-info{--tc:var(--primary);--ts:var(--primary-soft);--tl:var(--primary-line)}
+.t-warn{--tc:var(--warn);--ts:var(--warn-soft);--tl:var(--warn-line)}
+.t-ok{--tc:var(--ok);--ts:var(--ok-soft);--tl:var(--ok-line)}
+.t-muted{--tc:var(--muted-foreground);--ts:var(--muted);--tl:var(--border)}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+@media (max-width:520px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.tile{display:grid;gap:2px;text-align:left;padding:10px 12px;border:1px solid var(--border);border-top:3px solid var(--tl);border-radius:var(--radius);background:var(--card);color:var(--foreground);font:inherit;cursor:pointer}
+.tile[aria-pressed="true"]{background:var(--ts);border-color:var(--tl)}
+.tile .v{font-family:var(--mono);font-size:1.6rem;line-height:1.1;color:var(--tc)}
+.tile .l{font-size:.8rem;color:var(--muted-foreground)}
+.rows{display:grid;gap:6px}
+.row{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);color:var(--foreground);text-decoration:none}
+.row:hover{border-color:var(--ring)}
+.row.has-ask{border-left:4px solid var(--warn-line)}
+.row>div{min-width:0}
+.row b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row small{display:block;color:var(--muted-foreground);font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:.74rem;font-weight:600;padding:2px 9px;border-radius:99px;color:var(--tc);background:var(--ts);border:1px solid var(--tl);white-space:nowrap}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.side{text-align:right;font-size:.76rem;color:var(--muted-foreground);font-family:var(--mono);white-space:nowrap}
+.side .ask{display:block;color:var(--warn);font-family:var(--sans);font-weight:600}
+.empty{padding:14px;border:1px dashed var(--border);border-radius:var(--radius);color:var(--muted-foreground)}
+.status{font-size:.78rem;color:var(--muted-foreground)}
+</style>
+
+<main>
+  <header><h1>セッション票の一覧</h1></header>
+  <div class="tiles" id="tiles"></div>
+  <div class="rows" id="rows"><p class="empty">票を読み込み中。作業のあるセッションが票を立てると、ここに 1 行ずつ増える。</p></div>
+  <p class="status" id="status"></p>
+</main>
+
+<script>
+(function(){
+  const $=id=>document.getElementById(id);
+  const STATE={waiting:["判断待ち","t-warn"],running:["走行中","t-info"],done:["完了","t-ok"],stopped:["中断","t-muted"]};
+  const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=String(x);return e};
+  const fmt=s=>{const d=new Date(s);return isNaN(d)?"":d.toLocaleString("ja-JP",{timeZone:"Asia/Tokyo",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"})};
+  let all=[], filter=null;
+  const rank=v=>(v.openAsks>0?0:v.state==="running"?1:v.state==="waiting"?0:2);
+  function render(){
+    const tiles=$("tiles"); tiles.replaceChildren();
+    Object.entries(STATE).forEach(([k,[label,t]])=>{
+      const n=all.filter(x=>x.state===k).length;
+      const b=el("button","tile "+t); b.type="button"; b.id="tile-"+k; b.setAttribute("aria-pressed",String(filter===k));
+      b.appendChild(el("span","v",n)); b.appendChild(el("span","l",label));
+      b.addEventListener("click",()=>{filter=filter===k?null:k;render()}); tiles.appendChild(b);
+    });
+    const rows=$("rows"); rows.replaceChildren();
+    const list=all.filter(x=>!filter||x.state===filter).sort((a,b)=>rank(a)-rank(b)||String(b.updatedAt||"").localeCompare(String(a.updatedAt||"")));
+    if(!list.length){rows.appendChild(el("p","empty",filter?"この状態の票は無い。":"まだ票は無い。"));return}
+    list.forEach(v=>{
+      const ok=/^https:\/\/claude\.ai\//.test(String(v.url||""));
+      const r=el(ok?"a":"div","row"+(v.openAsks>0?" has-ask":"")); if(ok) r.href=v.url;
+      const s=STATE[v.state]||STATE.running; r.appendChild(el("span","chip "+s[1],s[0]));
+      const mid=el("div"); mid.appendChild(el("b",null,v.title||"（無題）")); if(v.summary) mid.appendChild(el("small",null,v.summary)); r.appendChild(mid);
+      const side=el("div","side"); if(v.openAsks>0) side.appendChild(el("span","ask","宿題 "+v.openAsks)); side.append(fmt(v.updatedAt)); r.appendChild(side);
+      rows.appendChild(r);
+    });
+  }
+  const timer=setTimeout(()=>{$("status").textContent="票を読み込めなかった。claude.ai にサインインした状態で開くと出る。"},10000);
+  claude.use("db").then(db=>{
+    if(!db){clearTimeout(timer);$("status").textContent="この表示では票を読めない。claude.ai にサインインした状態で開くと出る。";return}
+    db.collection("sheets").onSnapshot(q=>{clearTimeout(timer);$("status").textContent="";all=q.docs.map(d=>d.data()||{});render()},()=>{clearTimeout(timer);$("status").textContent="票の読み込みに失敗した。開き直すともう一度読む。"});
+  });
+  render();
+})();
+</script>
